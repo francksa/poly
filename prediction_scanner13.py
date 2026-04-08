@@ -3,12 +3,12 @@ Prediction Market Scanner v6
 =============================
 Triple-source: Kalshi + Polymarket + Manifold Markets
 Searches all three platforms' public APIs for prediction markets by keyword.
- 
+
 Usage:
     pip install streamlit requests plotly pandas
     streamlit run prediction_scanner.py
 """
- 
+
 import streamlit as st
 import requests
 import pandas as pd
@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time, re, json
 from datetime import datetime
- 
+
 # ─── Config ───────────────────────────────────────────────────────────────────
 KALSHI_BASE = "https://api.elections.kalshi.com/trade-api/v2"
 POLY_GAMMA = "https://gamma-api.polymarket.com"
@@ -24,10 +24,10 @@ POLY_CLOB = "https://clob.polymarket.com"
 MANIFOLD_BASE = "https://api.manifold.markets"
 SESSION = requests.Session()
 SESSION.headers.update({"Accept": "application/json"})
- 
+
 st.set_page_config(page_title="Prediction Market Scanner", page_icon="📊",
                     layout="wide", initial_sidebar_state="collapsed")
- 
+
 st.markdown("""
 <style>
     .stApp{background-color:#0a0e17}
@@ -55,12 +55,12 @@ st.markdown("""
     [data-baseweb="popover"] li:hover{background-color:#e2e8f0 !important}
 </style>
 """, unsafe_allow_html=True)
- 
- 
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # KALSHI
 # ═══════════════════════════════════════════════════════════════════════════════
- 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def kalshi_fetch_events():
     out = []
@@ -79,7 +79,7 @@ def kalshi_fetch_events():
             if not out: raise e
             break
     return out
- 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def kalshi_fetch_nonmve_markets():
     """Fetch non-combo markets directly. Catches earnings, economics, etc. missed by events pagination."""
@@ -98,7 +98,7 @@ def kalshi_fetch_nonmve_markets():
             if not cursor or not batch: break
         except: break
     return out
- 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def kalshi_fetch_series_list():
     """Fetch all Kalshi series with their categories."""
@@ -108,7 +108,7 @@ def kalshi_fetch_series_list():
         return r.json().get("series", [])
     except:
         return []
- 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def kalshi_fetch_by_category(category_names):
     """Fetch events filtered by category via series_ticker matching."""
@@ -135,7 +135,7 @@ def kalshi_fetch_by_category(category_names):
                     out.append(ev)
         except: continue
     return out
- 
+
 def kalshi_search(query, events):
     kw = query.lower().strip().split()
     results = []
@@ -182,7 +182,7 @@ def kalshi_search(query, events):
             })
     results.sort(key=lambda x: x["volume_24h"], reverse=True)
     return results
- 
+
 @st.cache_data(ttl=300, show_spinner=False)
 def kalshi_candles(series, ticker):
     end = int(time.time()); start = end - 90*86400
@@ -206,12 +206,12 @@ def kalshi_candles(series, ticker):
             if out: return out
         except: continue
     return []
- 
- 
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # POLYMARKET
 # ═══════════════════════════════════════════════════════════════════════════════
- 
+
 @st.cache_data(ttl=600, show_spinner=False)
 def poly_fetch_markets():
     """Fetch active Polymarket markets. Three passes, graceful degradation on failures."""
@@ -244,7 +244,7 @@ def poly_fetch_markets():
             except: break
     
     return out
- 
+
 def poly_search(query, markets):
     kw = query.lower().strip().split()
     results = []
@@ -305,7 +305,7 @@ def poly_search(query, markets):
         })
     results.sort(key=lambda x: x["volume_24h"], reverse=True)
     return results
- 
+
 @st.cache_data(ttl=300, show_spinner=False)
 def poly_history(token_id):
     if not token_id: return []
@@ -322,12 +322,12 @@ def poly_history(token_id):
         out.sort(key=lambda x:x["ts"])
         return out
     except: return []
- 
- 
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MANIFOLD MARKETS
 # ═══════════════════════════════════════════════════════════════════════════════
- 
+
 @st.cache_data(ttl=120, show_spinner=False)
 def manifold_search(query):
     """Search Manifold Markets — has native server-side text search."""
@@ -373,8 +373,8 @@ def manifold_search(query):
     
     results.sort(key=lambda x: x["volume_24h"], reverse=True)
     return results
- 
- 
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def manifold_bet_history(market_id):
     """Fetch bet history for a Manifold market and convert to probability timeseries."""
@@ -421,26 +421,26 @@ def manifold_bet_history(market_id):
         return out
     except:
         return []
- 
- 
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SHARED
 # ═══════════════════════════════════════════════════════════════════════════════
- 
+
 def prob_color(v):
     p = v*100
     if p >= 70: return "#22c55e"
     if p >= 40: return "#eab308"
     if p <= 15: return "#64748b"
     return "#ef4444"
- 
+
 def fmt_vol(v):
     n = float(v or 0)
     if n >= 1e6: return f"${n/1e6:.1f}M"
     if n >= 1e3: return f"${n/1e3:.0f}K"
     if n > 0: return f"${int(n)}"
     return "—"
- 
+
 def render_chart(entry, candles):
     if not candles:
         st.warning("No price history available.")
@@ -451,14 +451,14 @@ def render_chart(entry, candles):
     chp = (ch/first*100) if first > 0 else 0
     lc = "#22c55e" if ch >= 0 else "#ef4444"
     fc = "rgba(34,197,94,0.08)" if ch >= 0 else "rgba(239,68,68,0.08)"
- 
+
     c1,c2,c3,c4,c5 = st.columns(5)
     c1.metric("Current", f"{last*100:.1f}%")
     c2.metric("Change", f"{ch*100:+.1f}pp", f"{chp:+.1f}%")
     c3.metric("High", f"{df['high'].max()*100:.0f}%")
     c4.metric("Low", f"{df['low'].min()*100:.0f}%")
     c5.metric("Data Points", len(df))
- 
+
     has_vol = df["volume"].sum() > 0
     fig = make_subplots(rows=2 if has_vol else 1, cols=1, shared_xaxes=True,
                         row_heights=[0.8,0.2] if has_vol else [1], vertical_spacing=0.03)
@@ -477,15 +477,15 @@ def render_chart(entry, candles):
     fig.update_yaxes(gridcolor="#1e293b", showgrid=True, row=1, col=1,
         ticksuffix="%", tickfont=dict(size=10,color="#475569"))
     st.plotly_chart(fig, use_container_width=True)
- 
- 
+
+
 # Distinct colors for multi-outcome overlays
 OUTCOME_COLORS = [
     "#3b82f6", "#ef4444", "#22c55e", "#f59e0b", "#8b5cf6",
     "#ec4899", "#06b6d4", "#f97316", "#14b8a6", "#a855f7",
     "#eab308", "#6366f1", "#d946ef", "#84cc16",
 ]
- 
+
 def render_multi_outcome_chart(event_title, siblings):
     """Render all outcomes of a multi-market event on one chart."""
     fig = go.Figure()
@@ -552,8 +552,8 @@ def render_multi_outcome_chart(event_title, siblings):
                 </div>
                 <span style="font-size:12px;font-weight:700;font-family:monospace;color:{c};min-width:40px;text-align:right;">{pct}</span>
             </div>""", unsafe_allow_html=True)
- 
- 
+
+
 def group_by_event(results):
     """Group results by event_ticker to identify multi-outcome events."""
     groups = {}
@@ -567,7 +567,7 @@ def group_by_event(results):
         else:
             ungrouped.append(r)
     return groups, ungrouped
- 
+
 def render_row(entry, idx, tab):
     price = entry["price"]
     color = prob_color(price) if price > 0 else "#334155"
@@ -595,19 +595,19 @@ def render_row(entry, idx, tab):
         if has_data and st.button("📈", key=f"c_{tab}_{idx}_{hash(entry['ticker'])}"):
             st.session_state.selected_market = entry
             st.rerun()
- 
- 
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # UI
 # ═══════════════════════════════════════════════════════════════════════════════
- 
+
 st.markdown("""<div style="margin-bottom:2px;">
     <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#3b82f6;box-shadow:0 0 6px #3b82f680;margin-right:6px;"></span>
     <span style="font-size:10px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:1.5px;">Prediction Market Intelligence</span>
 </div>""", unsafe_allow_html=True)
 st.markdown("## Market Scanner")
 st.caption("**Kalshi** + **Polymarket** + **Manifold** · Public APIs · No auth · Click 📈 for probability trend charts")
- 
+
 # Category filter — maps to Kalshi series categories and Polymarket category strings
 CATEGORIES = {
     "All Categories":          {"kalshi": None, "poly_kw": None},
@@ -624,9 +624,9 @@ CATEGORIES = {
     "₿ Crypto":                 {"kalshi": "Crypto", "poly_kw": ["crypto","bitcoin","ethereum","defi"]},
     "🚗 Transportation":        {"kalshi": "Transportation", "poly_kw": ["transportation","auto","aviation"]},
 }
- 
+
 TAGS = ["Trump","Bitcoin","recession","inflation","Fed","tariff","AI","Pope","Tesla","China","oil","earnings"]
- 
+
 c_cat, cs, cb = st.columns([2, 4, 1])
 with c_cat:
     selected_cat = st.selectbox("Category", options=list(CATEGORIES.keys()),
@@ -636,16 +636,16 @@ with cs:
                           label_visibility="collapsed", key="q")
 with cb:
     sc = st.button("Search", use_container_width=True)
- 
+
 tc = None
 cols = st.columns(min(len(TAGS),6))
 for i,t in enumerate(TAGS):
     with cols[i%len(cols)]:
         if st.button(t, key=f"t_{t}", use_container_width=True): tc = t
- 
+
 for k in ["last_query","selected_market","last_cat"]:
     if k not in st.session_state: st.session_state[k] = None
- 
+
 # Allow trending mode without a search term
 is_trending = CATEGORIES.get(selected_cat, {}).get("trending", False)
 aq = tc or (query if sc or query else None)
@@ -655,11 +655,11 @@ if aq and (aq != st.session_state.last_query or selected_cat != st.session_state
     st.session_state.last_query = aq
     st.session_state.last_cat = selected_cat
     st.session_state.selected_market = None
- 
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 if st.session_state.last_query:
     q = st.session_state.last_query
- 
+
     if st.session_state.selected_market:
         e = st.session_state.selected_market
         if st.button("← Back to results"):
@@ -697,7 +697,7 @@ if st.session_state.last_query:
                 else:
                     candles = []
             render_chart(e, candles)
- 
+
     else:
         kr, pr, mr = [], [], []
         cat_cfg = CATEGORIES.get(selected_cat, {"kalshi": None, "poly_kw": None})
@@ -825,7 +825,7 @@ if st.session_state.last_query:
                             seen_tickers.add(m.get("ticker",""))
                         kr.sort(key=lambda x: x["volume_24h"], reverse=True)
                 except Exception as e: st.warning(f"Kalshi: {e}")
- 
+
             with st.spinner("Searching Polymarket..."):
                 try:
                     pm = poly_fetch_markets()
@@ -833,7 +833,7 @@ if st.session_state.last_query:
                     if cat_poly_kw and pr:
                         pr = [r for r in pr if any(kw in (r.get("category","")+" "+r.get("question","")).lower() for kw in cat_poly_kw)] or pr
                 except Exception as e: st.warning(f"Polymarket: {e}")
- 
+
             with st.spinner("Searching Manifold..."):
                 try:
                     mr = manifold_search(q)
@@ -841,7 +841,7 @@ if st.session_state.last_query:
                         filtered = [r for r in mr if any(kw in r.get("question","").lower() for kw in cat_poly_kw)]
                         if filtered: mr = filtered
                 except Exception as e: st.warning(f"Manifold: {e}")
- 
+
         # Group Kalshi results by event for display
         kalshi_groups, kalshi_ungrouped = group_by_event(kr)
         
@@ -870,14 +870,14 @@ if st.session_state.last_query:
         kalshi_display.sort(key=lambda x: x["volume_24h"], reverse=True)
         
         combined = sorted(kalshi_display + pr + mr, key=lambda x: x["volume_24h"], reverse=True)
- 
+
         st.markdown(f"""<div style="font-size:12px;color:#64748b;margin:8px 0 12px;">
             <strong style="color:#e2e8f0;">{len(combined)}</strong> {"trending markets" if is_trending_mode else f'results for "<span style="color:#3b82f6;">{q}</span>"'}
             — <span style="color:#3b82f6;">{len(kr)} Kalshi</span>
             + <span style="color:#8b5cf6;">{len(pr)} Polymarket</span>
             + <span style="color:#f59e0b;">{len(mr)} Manifold</span>
         </div>""", unsafe_allow_html=True)
- 
+
         if not combined:
             st.info("No open markets match this query on any platform. Try broader terms.")
         else:
@@ -922,6 +922,6 @@ else:
             Manifold has server-side search — great for brand-specific queries like "Tesla", "Netflix", "OpenAI"
         </p>
     </div>""", unsafe_allow_html=True)
- 
+
 st.markdown("---")
 st.caption("Kalshi + Polymarket + Manifold public APIs · Prices = implied probabilities · Not financial advice · v6")
